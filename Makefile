@@ -38,5 +38,5 @@ secrets:
 	@echo "GRAFANA_ADMIN_PASSWORD=$$(openssl rand -base64 18)"
 
 # DANGER: removes containers AND volumes (all InfluxDB/Grafana/Node-RED data)
-clean:
-	docker compose down -v
+#clean:
+#	docker compose down -v
