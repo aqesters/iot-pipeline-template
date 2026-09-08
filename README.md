@@ -65,12 +65,12 @@ of three fake machines (`press-01`, `press-02`, `cnc-04`).
 ├── docker-compose.yml              # Core 3-service stack
 ├── docker-compose.portainer.yml    # Optional: add a Docker GUI (see file header)
 ├── .env.example                    # Copy to .env, fill in secrets
-├── Makefile                        # up / down / logs / backup / secrets
+├── Makefile                        # up / down / logs / backup / secrets / sync-flows / restore-flows
 ├── node-red/
 │   ├── Dockerfile                  # Bakes in node-red-contrib-influxdb at build time
 │   └── data/
-│       ├── flows.json              # The pipeline itself — see docs/ARCHITECTURE.md
-│       ├── settings.js             # Env-driven runtime config (no secrets hardcoded)
+│       ├── flows.json              # Repo copy of the pipeline — see "Saving your work" below
+│       ├── settings.js             # Repo copy of runtime config (no secrets hardcoded)
 │       └── package.json            # Palette manifest
 ├── grafana/
 │   ├── provisioning/
@@ -82,16 +82,63 @@ of three fake machines (`press-01`, `press-02`, `cnc-04`).
     └── ARCHITECTURE.md             # Pipeline design + how to connect real equipment
 ```
 
+**Note on `node-red/data/`:** these files are *not* bind-mounted into the
+running container. Node-RED's actual runtime state (`flows.json`,
+`settings.js`, `flows_cred.json`, `node_modules`, etc.) lives in a Docker
+named volume (`node-red-data`), independent of this folder. The copies in
+`node-red/data/` are what you see in git — they only reflect the live state
+after you explicitly run `make sync-flows` (see below). A named volume was
+chosen over a bind mount after hitting host-filesystem issues (notably
+Docker Desktop on macOS interfering with Node-RED's atomic file rename on
+deploy) that don't reproduce with this approach.
+
 ## Common tasks
 
 ```bash
-make logs      # tail all container logs
-make ps        # container status
-make config    # validate docker-compose.yml + .env interpolation
-make backup    # dump InfluxDB data + Node-RED flows to ./backups/<timestamp>/
-make down      # stop the stack (keeps data)
-make clean     # stop the stack AND delete all volumes (destructive)
+make logs           # tail all container logs
+make ps              # container status
+make config          # validate docker-compose.yml + .env interpolation
+make backup          # dump InfluxDB data + Node-RED flows/creds to ./backups/<timestamp>/
+make sync-flows      # pull flows.json + settings.js from the running container into the repo
+make restore-flows   # push the repo's flows.json + settings.js into the running container
+make down            # stop the stack (keeps data — named volume persists)
+make clean           # stop the stack AND delete all volumes (destructive, commented out by default)
 ```
+
+## Saving your work: flows.json and settings.js
+
+Node-RED writes directly to the named volume, not to this repo folder. To
+get your changes into git, or to load a client's version onto a fresh
+machine, use the sync/restore commands rather than editing the files under
+`node-red/data/` directly and expecting them to take effect.
+
+**While actively developing (editor → repo):**
+```bash
+# 1. Edit flows in the Node-RED UI as normal (http://localhost:1880), hit Deploy
+# 2. Pull the current state out of the container and into the repo
+make sync-flows
+# 3. Review and commit
+git add node-red/data/flows.json node-red/data/settings.js
+git commit -m "Update pipeline logic for <change>"
+```
+
+**On a fresh clone or a new machine (repo → editor):**
+```bash
+make up              # creates the volume + starts the containers
+make restore-flows   # pushes the repo's flows.json + settings.js into the container
+# Then open the Node-RED editor and hit Deploy so Node-RED picks up the change
+```
+
+Both `sync-flows` and `restore-flows` require the stack to already be
+running (`make up`) — they operate via `docker cp` against the live
+container, not the volume directly.
+
+**`flows_cred.json` is intentionally excluded from this workflow.** It never
+syncs to the repo and is not tracked in git. It lives only in the named
+volume, decrypted using `NODE_RED_CREDENTIAL_SECRET` from `.env`. Re-enter
+credentials (PLC auth, tokens, etc.) through the Node-RED editor on each new
+deployment. If you need a recovery copy, `make backup` captures it as part
+of the encrypted-at-rest backup — outside of git entirely.
 
 ## Version control per client
 
@@ -104,6 +151,8 @@ cd client-acme-pipeline
 rm -rf .git && git init
 git remote add origin <new-private-repo-url>
 cp .env.example .env   # fill in this client's real secrets — .env is gitignored
+make up
+make restore-flows     # load the template's starter flows.json/settings.js into the new container
 git add .
 git commit -m "Initial pipeline for Acme Manufacturing"
 git push -u origin main
@@ -116,8 +165,8 @@ password, and any credentials Node-RED encrypts.
 ## Going live at a client site
 
 1. Replace the simulator with a real input node for their equipment (MQTT / Modbus / OPC-UA / S7 / REST) — see `docs/ARCHITECTURE.md`.
-2. Tune calibration constants, thresholds, and health-score weighting in the `Math`, `Stateful Ops`, and `Synthetic` function nodes for their actual machines.
-3. Set `NODE_RED_ENABLE_AUTH=true` and configure `adminAuth` in `node-red/data/settings.js` if the Node-RED editor is reachable outside a VPN/Tailscale network.
+2. Tune calibration constants, thresholds, and health-score weighting in the `Math`, `Stateful Ops`, and `Synthetic` function nodes for their actual machines, then `make sync-flows` and commit.
+3. Set `NODE_RED_ENABLE_AUTH=true` and configure `adminAuth` in `node-red/data/settings.js` if the Node-RED editor is reachable outside a VPN/Tailscale network — edit via the Node-RED UI or a direct volume edit, then `make sync-flows` to capture it in git.
 4. Turn off the public InfluxDB port binding in `docker-compose.yml` (leave InfluxDB reachable only on the internal Docker network) once you don't need it for debugging.
 5. Decide on hosting (client-hosted vs. your managed VM vs. hybrid) and remote access (Tailscale vs. WireGuard) per the standard tool-stack decision tree.
 6. Point Uptime Kuma (run centrally, across all clients) at this stack's exposed endpoints.
@@ -127,3 +176,4 @@ password, and any credentials Node-RED encrypts.
 
 - **Why Flux, not InfluxQL**: the Grafana datasource is provisioned in Flux mode to match InfluxDB 2.x's native query language and to use `schema.tagValues()` for the machine-picker dashboard variable. If you're more comfortable in InfluxQL, InfluxDB 2.x still accepts it via the `/query` compatibility endpoint, but the provisioned datasource here is Flux-first.
 - **Environment variable substitution**: both Node-RED (`${VAR}` in `flows.json`) and Grafana (`$__env{VAR}` in provisioning YAML) resolve these directly from the container's environment at startup — nothing needs templating at build time. Update `.env` and restart the affected container to change them.
+- **Why a named volume instead of a bind mount for `node-red/data/`**: bind-mounting `flows.json` directly triggered `EBUSY: resource busy or locked` errors on deploy, traced to macOS Spotlight indexing interfering with Node-RED's atomic rename-on-save. The named volume sidesteps this entirely; `make sync-flows` / `make restore-flows` bridge it back to git deliberately rather than automatically.
