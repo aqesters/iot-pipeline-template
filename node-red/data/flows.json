@@ -8,6 +8,21 @@
         "env": []
     },
     {
+        "id": "01066a81e9c4d841",
+        "type": "influxdb",
+        "hostname": "",
+        "port": "",
+        "protocol": "http",
+        "database": "",
+        "name": "InfluxDB (env-configured)",
+        "usetls": false,
+        "tls": "",
+        "influxdbVersion": "2.0",
+        "url": "${INFLUXDB_URL}",
+        "timeout": 10,
+        "rejectUnauthorized": true
+    },
+    {
         "id": "084fad0bba2c0c9f",
         "type": "comment",
         "z": "4a65d366b52695a9",
@@ -184,26 +199,6 @@
         ]
     },
     {
-        "id": "01066a81e9c4d841",
-        "type": "influxdb",
-        "z": "",
-        "hostname": "",
-        "port": "",
-        "protocol": "http",
-        "database": "",
-        "name": "InfluxDB (env-configured)",
-        "usetls": false,
-        "tls": "",
-        "influxdbVersion": "2.0",
-        "url": "${INFLUXDB_URL}",
-        "timeout": 10,
-        "rejectUnauthorized": true,
-        "org": "${INFLUXDB_ORG}",
-        "credentials": {
-            "token": "${INFLUXDB_TOKEN}"
-        }
-    },
-    {
         "id": "11f464e53ab5e305",
         "type": "influxdb out",
         "z": "4a65d366b52695a9",
@@ -236,6 +231,16 @@
         "statusType": "auto",
         "x": 470,
         "y": 740,
+        "wires": []
+    },
+    {
+        "id": "f29fd096335bec94",
+        "type": "comment",
+        "z": "4a65d366b52695a9",
+        "name": "If you see this, then flows.json changes are persistent!",
+        "info": "",
+        "x": 720,
+        "y": 80,
         "wires": []
     }
 ]
