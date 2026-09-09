@@ -180,4 +180,4 @@ password, and any credentials Node-RED encrypts.
 
 ## To Do List
 
-- Create separate InfluxDB tokens for write access (for Node-RED) and read-only access (for Grafana)
+- Create separate InfluxDB tokens for write-only access (for Node-RED) and read-only access (for Grafana)
