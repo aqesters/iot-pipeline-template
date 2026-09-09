@@ -177,3 +177,7 @@ password, and any credentials Node-RED encrypts.
 - **Why Flux, not InfluxQL**: the Grafana datasource is provisioned in Flux mode to match InfluxDB 2.x's native query language and to use `schema.tagValues()` for the machine-picker dashboard variable. If you're more comfortable in InfluxQL, InfluxDB 2.x still accepts it via the `/query` compatibility endpoint, but the provisioned datasource here is Flux-first.
 - **Environment variable substitution**: both Node-RED (`${VAR}` in `flows.json`) and Grafana (`$__env{VAR}` in provisioning YAML) resolve these directly from the container's environment at startup — nothing needs templating at build time. Update `.env` and restart the affected container to change them.
 - **Why a named volume instead of a bind mount for `node-red/data/`**: bind-mounting `flows.json` directly triggered `EBUSY: resource busy or locked` errors on deploy, traced to macOS Spotlight indexing interfering with Node-RED's atomic rename-on-save. The named volume sidesteps this entirely; `make sync-flows` / `make restore-flows` bridge it back to git deliberately rather than automatically.
+
+## To Do List
+
+- Create separate InfluxDB tokens for write access (for Node-RED) and read-only access (for Grafana)
