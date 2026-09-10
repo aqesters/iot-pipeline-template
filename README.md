@@ -1,4 +1,4 @@
-# IIoT Data Pipeline Template
+# IoT Data Pipeline Template
 
 Dockerized Node-RED -> InfluxDB -> Grafana stack for pulling machine/process
 data off the plant floor and into dashboards clients can actually use.
@@ -171,6 +171,41 @@ password, and any credentials Node-RED encrypts.
 5. Decide on hosting (client-hosted vs. your managed VM vs. hybrid) and remote access (Tailscale vs. WireGuard) per the standard tool-stack decision tree.
 6. Point Uptime Kuma (run centrally, across all clients) at this stack's exposed endpoints.
 7. Set a real retention policy (`INFLUXDB_INIT_RETENTION`) matching what the client needs and what your storage budget allows.
+
+## Troubleshooting
+
+**`docker compose up -d` (or `--build`) fails during the Node-RED image build with `npm ERR! code EAI_AGAIN` / `getaddrinfo EAI_AGAIN registry.npmjs.org`**
+
+This is a DNS resolution failure inside the Docker build environment, not an
+npm or Node-RED problem — the build container can't resolve
+`registry.npmjs.org` (or any hostname) to an IP address at all, so the
+`npm install` step in `node-red/Dockerfile` fails before it can fetch
+`node-red-contrib-influxdb`.
+
+**Fix:** point the Docker daemon at a known-good public DNS resolver
+explicitly, rather than relying on whatever it auto-detected:
+
+```bash
+sudo tee /etc/docker/daemon.json <<EOF
+{
+  "dns": ["8.8.8.8"]
+}
+EOF
+sudo systemctl restart docker
+```
+
+Then retry:
+
+```bash
+docker compose up -d --build
+```
+
+If you want to sanity-check the fix took effect before rebuilding the whole
+stack, run a throwaway container against the same lookup that was failing:
+
+```bash
+docker run --rm busybox nslookup registry.npmjs.org
+```
 
 ## Notes
 
