@@ -1,4 +1,4 @@
-# IoT Data Pipeline Template
+# Data Pipeline Template
 
 Dockerized Node-RED -> InfluxDB -> Grafana stack for pulling machine/process
 data off the plant floor and into dashboards clients can actually use.
